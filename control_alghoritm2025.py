@@ -1,16 +1,15 @@
-#!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+from std_msgs.msg import String
 import serial
 import math
 import time
 
 class StateMachine(Node):
     def __init__(self):
-        super().__init__('state_machine')  # Node name
-        self.arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)  # Communication with Arduino
+        super().__init__('state_machine')
+        self.arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
         
         # Thrusters and servo names
         self.right_thruster = "right_thruster"
@@ -28,6 +27,9 @@ class StateMachine(Node):
         # Subscriber to "cmd_vel" topic
         self.create_subscription(Twist, 'cmd_vel', self.cmd_callback, 10)
         
+        # Subscriber to "steering_directions" topic
+        self.create_subscription(String, 'steering_directions', self.steering_callback, 10)
+        
         # Start running the state machine logic
         self.situation_loop()
 
@@ -44,6 +46,33 @@ class StateMachine(Node):
                 self.angle = 90
             elif self.y < 0:
                 self.angle = -90
+
+    def steering_callback(self, msg):
+        angle = int(msg.data)
+        self.get_logger().info(f"Received steering angle: {angle}")
+        self.control_thrusters(angle)
+
+    def control_thrusters(self, angle):
+        if angle == 0:
+            # Move forward
+            self.move(self.right_thruster, 150)
+            self.move(self.left_thruster, 150)
+            self.move(self.bow_thruster, 90)
+        elif angle == 45:
+            # Turn right
+            self.move(self.right_thruster, 90)
+            self.move(self.left_thruster, 150)
+            self.move(self.bow_thruster, 70)
+        elif angle == 315:
+            # Turn left
+            self.move(self.right_thruster, 150)
+            self.move(self.left_thruster, 90)
+            self.move(self.bow_thruster, 110)
+        else:
+            # Custom angle handling
+            self.move(self.right_thruster, 90 + angle)
+            self.move(self.left_thruster, 90 + angle)
+            self.move(self.bow_thruster, 90 + angle)
 
     def move(self, motor, angle):
         motor_id = 0
