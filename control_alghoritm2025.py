@@ -5,11 +5,13 @@ from std_msgs.msg import String
 import serial
 import math
 import time
+import threading
 
 class StateMachine(Node):
     def __init__(self):
         super().__init__('state_machine')
         self.arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
+        self.gps = serial.Serial(port='/dev/ttyACM0', baudrate=9600, timeout=1)
         
         # Thrusters and servo names
         self.right_thruster = "right_thruster"
@@ -23,6 +25,9 @@ class StateMachine(Node):
         self.y = 0
         self.angle = 0
         self.dist = 0
+        self.latitude = 0.0
+        self.longitude = 0.0
+        self.altitude = 0.0
         
         # Subscriber to "cmd_vel" topic
         self.create_subscription(Twist, 'cmd_vel', self.cmd_callback, 10)
@@ -32,6 +37,10 @@ class StateMachine(Node):
         
         # Start running the state machine logic
         self.situation_loop()
+
+        # Start a thread to read GPS data
+        self.gps_thread = threading.Thread(target=self.read_gps_data)
+        self.gps_thread.start()
 
     def cmd_callback(self, cmd_data):
         self.x = cmd_data.linear.x
@@ -87,6 +96,30 @@ class StateMachine(Node):
         self.get_logger().info(f"Motor: {motor}, Angle: {angle}")
         self.arduino.write(message.encode('utf-8'))
         time.sleep(0.05)  # Small delay to avoid overlapping messages
+
+    def read_gps_data(self):
+        while rclpy.ok():
+            try:
+                line = self.gps.readline().decode('ascii', errors='replace')
+                if line.startswith('$GNGGA'):
+                    data = line.split(',')
+                    if len(data) > 9:
+                        self.latitude = self.convert_to_degrees(data[2], data[3])
+                        self.longitude = self.convert_to_degrees(data[4], data[5])
+                        self.altitude = float(data[9])
+                        self.get_logger().info(f"Latitude: {self.latitude}, Longitude: {self.longitude}, Altitude: {self.altitude}")
+            except Exception as e:
+                self.get_logger().error(f"Error reading GPS data: {e}")
+
+    def convert_to_degrees(self, raw_value, direction):
+        if raw_value == '':
+            return 0.0
+        degrees = float(raw_value[:2])
+        minutes = float(raw_value[2:])
+        result = degrees + (minutes / 60.0)
+        if direction in ['S', 'W']:
+            result = -result
+        return result
 
     def situation_loop(self):
         while rclpy.ok():
