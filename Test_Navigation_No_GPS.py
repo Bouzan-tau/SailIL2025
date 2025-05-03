@@ -2,6 +2,7 @@
 
 import rospy
 import math
+import sys
 from std_msgs.msg import Float32
 
 # Constants
@@ -31,12 +32,10 @@ def calculate_engine_powers(error):
     """
     Calculate power levels for each engine based on the angle error.
     """
-    # Calculate power difference
     delta_P = K * error
     P_left = P_BASE - delta_P
     P_right = P_BASE + delta_P
 
-    # Ensure power levels are within 0% to 100%
     P_left = max(0.0, min(100.0, P_left))
     P_right = max(0.0, min(100.0, P_right))
     P_center = P_CENTER
@@ -76,11 +75,18 @@ def navigate_boat(start_lat, start_lon, end_lat, end_lon):
     rospy.loginfo("Engine power commands sent. Navigation complete.")
 
 if __name__ == '__main__':
+    if len(sys.argv) != 5:
+        print("Usage: python boat_navigation.py <start_lat> <start_lon> <end_lat> <end_lon>")
+        sys.exit(1)
+
     try:
-        start_lat = 40.7128
-        start_lon = -74.0060
-        end_lat = 40.7357
-        end_lon = -73.9840
+        start_lat = float(sys.argv[1])
+        start_lon = float(sys.argv[2])
+        end_lat = float(sys.argv[3])
+        end_lon = float(sys.argv[4])
         navigate_boat(start_lat, start_lon, end_lat, end_lon)
+    except ValueError:
+        print("Error: Coordinates must be numbers.")
+        sys.exit(1)
     except rospy.ROSInterruptException:
         pass
