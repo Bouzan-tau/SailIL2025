@@ -3,7 +3,7 @@
 import rospy
 import math
 import sys
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32MultiArray
 
 # Constants
 P_BASE = 50.0       # Base power for left and right engines (%)
@@ -44,14 +44,12 @@ def calculate_engine_powers(error):
 
 def navigate_boat(start_lat, start_lon, end_lat, end_lon):
     """
-    Calculate the route and publish proportional power commands for each engine.
+    Calculate the route and publish power commands for all engines to a single topic.
     """
     rospy.init_node('boat_navigation', anonymous=True)
     
-    # Publishers for each engine
-    left_pub = rospy.Publisher('left_engine_power', Float32, queue_size=10)
-    right_pub = rospy.Publisher('right_engine_power', Float32, queue_size=10)
-    center_pub = rospy.Publisher('center_engine_power', Float32, queue_size=10)
+    # Publisher for engine powers
+    pub = rospy.Publisher('engine_powers', Float32MultiArray, queue_size=10)
     rate = rospy.Rate(1)  # 1 Hz
 
     # Calculate desired bearing
@@ -62,15 +60,17 @@ def navigate_boat(start_lat, start_lon, end_lat, end_lon):
     current_heading = 0.0
     error = (desired_bearing - current_heading + 180) % 360 - 180  # Error in [-180, 180]
 
-    # Calculate and publish engine powers
+    # Calculate engine powers
     P_left, P_right, P_center = calculate_engine_powers(error)
-    left_pub.publish(P_left)
-    right_pub.publish(P_right)
-    center_pub.publish(P_center)
+
+    # Create and publish message
+    msg = Float32MultiArray()
+    msg.data = [P_left, P_right, P_center]
+    pub.publish(msg)
 
     rospy.loginfo(f"Engine powers - Left: {P_left}%, Right: {P_right}%, Center: {P_center}%")
 
-    # Keep node alive briefly to ensure messages are sent
+    # Keep node alive briefly to ensure message is sent
     rospy.sleep(1)
     rospy.loginfo("Engine power commands sent. Navigation complete.")
 
